@@ -1,0 +1,297 @@
+package heli3a.org.simpleimages;
+
+import android.app.Activity;
+import android.app.SearchManager;
+import android.content.Context;
+import android.content.Intent;
+import android.database.Cursor;
+import android.database.MatrixCursor;
+import android.graphics.Bitmap;
+import android.graphics.drawable.BitmapDrawable;
+import android.net.Uri;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.os.Environment;
+import android.provider.BaseColumns;
+import android.provider.MediaStore;
+import android.support.v4.app.LoaderManager;
+import android.support.v4.content.CursorLoader;
+import android.support.v4.content.Loader;
+import android.support.v4.view.MenuItemCompat;
+import android.support.v4.widget.CursorAdapter;
+import android.support.v4.widget.SimpleCursorAdapter;
+import android.support.v7.app.AppCompatActivity;
+import android.support.v7.widget.SearchView;
+import android.support.v7.widget.Toolbar;
+import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.AdapterView;
+import android.widget.GridView;
+import android.widget.ImageView;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
+
+public class MainActivity extends AppCompatActivity {
+
+    public static final String TAG = "MainActivity";
+
+    private final int REQ_TAKE_IMAGE = 1;
+    private final int REQ_SHOW_IMAGE = 2;
+
+    private final int LOADER_ID_PHOTOS = 1;
+
+    private SearchView mSearchView;
+    private GridView mGridView;
+
+    private File mPhoto;
+
+    private CursorAdapter mAdapter;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
+        setSupportActionBar(toolbar);
+
+        mAdapter = new ImageAdapter(this, null, true);
+
+        mGridView = (GridView) findViewById(R.id.gridView);
+        mGridView.setAdapter(mAdapter);
+
+        mGridView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                if (view != null && view.getTag() != null && view.getTag() instanceof MediaStoreImageData) {
+                    final MediaStoreImageData data = (MediaStoreImageData) view.getTag();
+                    ImageActivity.newInstance(MainActivity.this, REQ_SHOW_IMAGE, data);
+                }
+            }
+        });
+
+        getSupportLoaderManager().initLoader(LOADER_ID_PHOTOS, null, new ImageCallbacks());
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+
+        SearchManager searchManager = (SearchManager) getSystemService(Context.SEARCH_SERVICE);
+
+        // SearchView
+        MenuItem searchItem = menu.findItem(R.id.action_search);
+        mSearchView = (SearchView) MenuItemCompat.getActionView(searchItem);
+        if (mSearchView != null) {
+            mSearchView.setOnQueryTextListener(new SearchViewListener());
+        }
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+
+        int id = item.getItemId();
+        switch (id) {
+            case R.id.action_camera:
+                takePicture();
+                return true;
+            case R.id.action_search:
+                // onSearchRequested();
+                return true;
+            default:
+                return super.onOptionsItemSelected(item);
+
+        }
+    }
+
+    private void takePicture() {
+        mPhoto = null;
+        Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+        if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
+
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String imageFileName = "SI_" + timeStamp + "_";
+            File storageDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
+            try {
+                mPhoto = File.createTempFile(imageFileName, ".jpg", storageDir);
+            } catch (IOException e) {
+                Toast.makeText(this, e.getLocalizedMessage(), Toast.LENGTH_SHORT).show();
+                return;
+            }
+
+            if (mPhoto != null) {
+                takePictureIntent.putExtra(MediaStore.EXTRA_OUTPUT, Uri.fromFile(mPhoto));
+                startActivityForResult(takePictureIntent, REQ_TAKE_IMAGE);
+            }
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        Log.d(TAG, "onActivityResult:" + requestCode + ":" + resultCode);
+        switch (requestCode) {
+            case REQ_TAKE_IMAGE:
+                try {
+                    if (resultCode == Activity.RESULT_OK && mPhoto != null && mPhoto.exists() && mPhoto.isFile()) {
+                        Toast.makeText(this, getString(R.string.hint_picture_taken), Toast.LENGTH_LONG).show();
+                        galleryAddPic(mPhoto);
+                    }
+                } finally {
+                    mPhoto = null;
+                }
+        }
+    }
+
+    private void galleryAddPic(File f) {
+        Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
+        mediaScanIntent.setData(Uri.fromFile(f));
+        this.sendBroadcast(mediaScanIntent);
+    }
+
+    private class ImageCallbacks implements LoaderManager.LoaderCallbacks<Cursor> {
+
+        @Override
+        public Loader<Cursor> onCreateLoader(int id, Bundle args) {
+            Log.d(TAG, "onCreateLoader");
+            String[] projection = {MediaStore.Images.Media._ID, MediaStore.Images.Media.DATA, MediaStore.Images.Media.DESCRIPTION};
+
+            String selection = null;
+            String[] selectionArgs = null;
+            if (args != null && args.containsKey(MediaStore.Images.Media.DESCRIPTION)) {
+                final String pattern = args.getString(MediaStore.Images.Media.DESCRIPTION);
+                if (pattern != null && pattern.trim().length() > 0) {
+                    selection = MediaStore.Images.Media.DESCRIPTION + " like ?";
+                    selectionArgs = new String[]{"%" + args.getString(MediaStore.Images.Media.DESCRIPTION) + "%"};
+                }
+            }
+
+            String sort = null;
+            // String sort = MediaStore.Images.Media.DATE_TAKEN + " DESC";
+
+
+            CursorLoader cursorLoader = new CursorLoader(MainActivity.this,
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection, selectionArgs, sort);
+            return cursorLoader;
+        }
+
+        @Override
+        public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
+            mAdapter.swapCursor(data);
+        }
+
+        @Override
+        public void onLoaderReset(Loader<Cursor> loader) {
+            mAdapter.swapCursor(null);
+        }
+    }
+
+    private class ImageAdapter extends CursorAdapter {
+
+        public ImageAdapter(Context context, Cursor c, boolean autoRequery) {
+            super(context, c, autoRequery);
+        }
+
+        @Override
+        public View newView(Context context, Cursor cursor, ViewGroup parent) {
+            return LayoutInflater.from(context).inflate(R.layout.grid_item, parent, false);
+        }
+
+        @Override
+        public void bindView(View view, Context context, Cursor cursor) {
+
+            final TextView textView = (TextView) view.findViewById(R.id.textView);
+            String dsc = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DESCRIPTION));
+            textView.setText(dsc == null || dsc.trim().length() == 0 ? "" : dsc);
+
+            final ImageView imageView = (ImageView) view.findViewById(R.id.imageView);
+            try {
+                if (imageView != null && imageView.getDrawable() != null) {
+                    BitmapDrawable bd = ((BitmapDrawable) imageView.getDrawable());
+                    if (bd != null && bd.getBitmap() != null) {
+                        bd.getBitmap().recycle();
+                    }
+                }
+            } catch (Exception e) {}
+
+            int id = cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Media._ID));
+            String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
+
+            imageView.setTag(path); // !!! fuer den AsyncTask !!!
+            new ThumbnailLoader(imageView, id).execute();
+
+            view.setTag(new MediaStoreImageData(path, id)); // !!! fuer den GridView.onItemClickListener !!!
+        }
+    }
+
+    private class SearchViewListener implements SearchView.OnQueryTextListener {
+
+        @Override
+        public boolean onQueryTextSubmit(String query) {
+            return false;
+        }
+
+        @Override
+        public boolean onQueryTextChange(String newText) {
+            Bundle b = new Bundle();
+            b.putString(MediaStore.Images.Media.DESCRIPTION, newText);
+            getSupportLoaderManager().restartLoader(LOADER_ID_PHOTOS, b, new ImageCallbacks());
+            return false;
+        }
+    }
+
+    class ThumbnailLoader extends AsyncTask<Void, Void, Bitmap> {
+
+        private ImageView mView;
+        private String mPath;
+        private int mId = -1;
+
+        public ThumbnailLoader(ImageView v, int id) {
+            mView = v;
+            v.setVisibility(View.INVISIBLE);
+            mPath = v.getTag().toString();
+            mId = id;
+        }
+
+        @Override
+        protected Bitmap doInBackground(Void... params) {
+
+            try {
+                return ImageTools.loadThumbnail(MainActivity.this, mId, mPath);
+            } catch (Exception e) {
+                Log.e(TAG, e.getMessage(), e);
+                return null;
+            }
+        }
+
+        @Override
+        protected void onPostExecute(Bitmap bitmap) {
+            if (mPath.equals(mView.getTag())) {
+                mView.setImageBitmap(bitmap);
+                mView.setVisibility(View.VISIBLE);
+            }
+        }
+    }
+
+    class MediaStoreImageData {
+        public String path;
+        public int id;
+
+        public MediaStoreImageData(String path, int id) {
+            this.path = path;
+            this.id = id;
+
+        }
+    }
+}

@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">SimpleImages</string>
+
+    <string name="action_search">Suche</string>
+    <string name="action_camera">Kamera</string>
+    <string name="action_settings">Settings</string>
+    <string name="action_share">Teilen</string>
+    <string name="action_tag">Tag</string>
+    <string name="title_activity_image">ImageActivity</string>
+    <string name="hint_picture_taken">Picture taken.</string>
+    <string name="share_image">Share image using</string>
+</resources>
