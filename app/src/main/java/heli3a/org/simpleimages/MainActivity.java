@@ -5,21 +5,18 @@ import android.app.SearchManager;
 import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
-import android.database.MatrixCursor;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Environment;
-import android.provider.BaseColumns;
 import android.provider.MediaStore;
 import android.support.v4.app.LoaderManager;
 import android.support.v4.content.CursorLoader;
 import android.support.v4.content.Loader;
 import android.support.v4.view.MenuItemCompat;
 import android.support.v4.widget.CursorAdapter;
-import android.support.v4.widget.SimpleCursorAdapter;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.SearchView;
 import android.support.v7.widget.Toolbar;
@@ -37,6 +34,7 @@ import android.widget.Toast;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
@@ -51,6 +49,7 @@ public class MainActivity extends AppCompatActivity {
     private final int LOADER_ID_PHOTOS = 1;
 
     private SearchView mSearchView;
+
     private GridView mGridView;
 
     private File mPhoto;
@@ -251,35 +250,46 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+     // look in http://developer.android.com/training/displaying-bitmaps/process-bitmap.html
     class ThumbnailLoader extends AsyncTask<Void, Void, Bitmap> {
 
-        private ImageView mView;
+        private final WeakReference<ImageView> mViewReference;
         private String mPath;
         private int mId = -1;
 
         public ThumbnailLoader(ImageView v, int id) {
-            mView = v;
+            mViewReference = new WeakReference<ImageView>(v);
             v.setVisibility(View.INVISIBLE);
             mPath = v.getTag().toString();
             mId = id;
         }
 
-        @Override
+         @Override
         protected Bitmap doInBackground(Void... params) {
 
             try {
-                return ImageTools.loadThumbnail(MainActivity.this, mId, mPath);
+                if (mViewReference != null && mViewReference.get() != null && ! isCancelled()) {
+                    return ImageTools.loadThumbnail(MainActivity.this, mId, mPath);
+                }
             } catch (Exception e) {
                 Log.e(TAG, e.getMessage(), e);
-                return null;
             }
+            return null;
         }
 
         @Override
         protected void onPostExecute(Bitmap bitmap) {
-            if (mPath.equals(mView.getTag())) {
-                mView.setImageBitmap(bitmap);
-                mView.setVisibility(View.VISIBLE);
+
+            if (isCancelled()) {
+                bitmap = null;
+            }
+
+            if (mViewReference != null && bitmap != null) {
+                final ImageView imageView = mViewReference.get();
+                if (imageView != null && mPath.equals(imageView.getTag())) {
+                    imageView.setImageBitmap(bitmap);
+                    imageView.setVisibility(View.VISIBLE);
+                }
             }
         }
     }

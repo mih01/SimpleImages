@@ -2,10 +2,12 @@ package heli3a.org.simpleimages;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
+import android.media.Image;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -17,6 +19,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.Toast;
 
 import java.io.IOException;
 
@@ -134,13 +137,22 @@ public class ImageActivity extends AppCompatActivity {
     }
 
     private void share(int imageId) {
-        Intent i = new Intent(Intent.ACTION_SEND);
-        i.setType("image/jpeg");
-        i.putExtra(Intent.EXTRA_STREAM, getImageUri(imageId));
-        startActivity(Intent.createChooser(i, getString(R.string.share_image)));
+        try {
+            Intent i = new Intent(Intent.ACTION_SEND);
+            i.setType("image/jpeg");
+            i.putExtra(Intent.EXTRA_STREAM, getImageUri(imageId));
+            startActivity(Intent.createChooser(i, getString(R.string.share_image)));
+        } catch (Exception e) {
+            final String msg = e.getLocalizedMessage();
+            if (msg != null && msg.length() > 0) {
+                Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+            }
+        }
     }
 
     private class ImageLoader extends AsyncTask<Void, Void, Bitmap> {
+
+        private ProgressDialog mDialog;
 
         private int mId;
         private String mPath;
@@ -148,6 +160,14 @@ public class ImageActivity extends AppCompatActivity {
         public ImageLoader(int id, String path) {
             mId = id;
             mPath = path;
+
+            mDialog = new ProgressDialog(ImageActivity.this);
+        }
+
+        @Override
+        protected void onPreExecute() {
+            mDialog.setMessage("Please wait...");
+            mDialog.show();
         }
 
         @Override
@@ -161,6 +181,11 @@ public class ImageActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(Bitmap bitmap) {
+
+            if (mDialog != null && mDialog.isShowing()) {
+                mDialog.dismiss();
+            }
+
             if (ImageActivity.this.mImageView != null) {
                 ImageActivity.this.mImageView.setImageBitmap(bitmap);
             }
