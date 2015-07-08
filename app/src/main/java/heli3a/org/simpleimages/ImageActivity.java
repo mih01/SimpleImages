@@ -7,7 +7,6 @@ import android.content.ContentValues;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.graphics.Bitmap;
-import android.media.Image;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -17,11 +16,13 @@ import android.support.v7.widget.Toolbar;
 import android.text.InputType;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.EditText;
-import android.widget.ImageView;
 import android.widget.Toast;
 
 import java.io.IOException;
+
+import heli3a.org.simpleimages.views.CustomImageView;
 
 
 public class ImageActivity extends AppCompatActivity {
@@ -32,7 +33,7 @@ public class ImageActivity extends AppCompatActivity {
 
     private static final String ARGS_PATH = "path";
 
-    private ImageView mImageView;
+    private CustomImageView mImageView;
 
     private int mImageId;
 
@@ -56,7 +57,19 @@ public class ImageActivity extends AppCompatActivity {
         getSupportActionBar().setDisplayHomeAsUpEnabled(true);
         getSupportActionBar().setHomeButtonEnabled(true);
 
-        mImageView = (ImageView) findViewById(R.id.imageView1);
+        mImageView = (CustomImageView) findViewById(R.id.imageView1);
+        if (mImageView != null) {
+            mImageView.setOnSizeChangedListener(new CustomImageView.OnSizeChangedListener() {
+                @Override
+                public void onSizeChanged(int w, int h, int oldw, int oldh) {
+                    if (mImageView != null) {
+                        mImageView.setVisibility(View.INVISIBLE);
+                        ImageTools.recycleImageView(mImageView);
+                        new ImageLoader(mImagePath, mImageView.getWidth(), mImageView.getHeight()).execute();
+                    }
+                }
+            });
+        }
 
         mImageId = getIntent().getExtras().getInt(ARGS_ID);
         mImagePath = getIntent().getExtras().getString(ARGS_PATH);
@@ -70,7 +83,6 @@ public class ImageActivity extends AppCompatActivity {
     @Override
     protected void onResume() {
         super.onResume();
-        new ImageLoader(mImageId, mImagePath).execute();
     }
 
     @Override
@@ -107,19 +119,22 @@ public class ImageActivity extends AppCompatActivity {
         final EditText editText = new EditText(this);
         editText.setInputType(InputType.TYPE_CLASS_TEXT);
 
-        new AlertDialog.Builder(this).setTitle("Beschreibung")
+        // TODO: screen rotation
+        new AlertDialog.Builder(this).setTitle(R.string.add_tag)
                 .setPositiveButton(getString(android.R.string.ok),
                         new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                updateDescription(mImageId, editText.getText().toString());
-            }
-        }).setNegativeButton(getString(android.R.string.cancel),
-                        new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-            }
-        }).setView(editText).show();
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                updateDescription(mImageId, editText.getText().toString());
+                                dialog.dismiss();
+                            }
+                        }).setNegativeButton(getString(android.R.string.cancel),
+                new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialog, int which) {
+                        dialog.dismiss();
+                    }
+                }).setView(editText).show();
     }
 
     private Uri getImageUri(int id) {
@@ -136,6 +151,7 @@ public class ImageActivity extends AppCompatActivity {
         }
     }
 
+    // http://developer.android.com/training/sharing/send.html
     private void share(int imageId) {
         try {
             Intent i = new Intent(Intent.ACTION_SEND);
@@ -154,26 +170,28 @@ public class ImageActivity extends AppCompatActivity {
 
         private ProgressDialog mDialog;
 
-        private int mId;
         private String mPath;
 
-        public ImageLoader(int id, String path) {
-            mId = id;
-            mPath = path;
+        private int width = 0;
+        private int height = 0;
 
-            mDialog = new ProgressDialog(ImageActivity.this);
+        public ImageLoader(String path, int width, int height) {
+            this.mPath = path;
+            this.width = width;
+            this.height = height;
+            this.mDialog = new ProgressDialog(ImageActivity.this);
         }
 
         @Override
         protected void onPreExecute() {
-            mDialog.setMessage("Please wait...");
+            mDialog.setMessage(getString(R.string.load_image));
             mDialog.show();
         }
 
         @Override
         protected Bitmap doInBackground(Void... params) {
             try {
-                return ImageTools.loadBitmap(ImageActivity.this, mId, mPath);
+                return ImageTools.loadBitmap(ImageActivity.this, mPath, width, height);
             } catch (IOException e) {
                 return null;
             }
@@ -182,12 +200,15 @@ public class ImageActivity extends AppCompatActivity {
         @Override
         protected void onPostExecute(Bitmap bitmap) {
 
-            if (mDialog != null && mDialog.isShowing()) {
+            if (mDialog != null) {
                 mDialog.dismiss();
             }
 
-            if (ImageActivity.this.mImageView != null) {
+            if (ImageActivity.this.mImageView != null && !isCancelled()) {
                 ImageActivity.this.mImageView.setImageBitmap(bitmap);
+                ImageActivity.this.mImageView.setVisibility(View.VISIBLE);
+
+                ImageTools.animate(ImageActivity.this.mImageView);
             }
         }
     }

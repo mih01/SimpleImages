@@ -6,7 +6,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.database.Cursor;
 import android.graphics.Bitmap;
-import android.graphics.drawable.BitmapDrawable;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
@@ -37,6 +36,8 @@ import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+
+import heli3a.org.simpleimages.views.CustomImageView;
 
 
 public class MainActivity extends AppCompatActivity {
@@ -79,7 +80,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-        getSupportLoaderManager().initLoader(LOADER_ID_PHOTOS, null, new ImageCallbacks());
+        startLoader(LOADER_ID_PHOTOS, null, new ImageCallbacks());
     }
 
     @Override
@@ -94,6 +95,7 @@ public class MainActivity extends AppCompatActivity {
         mSearchView = (SearchView) MenuItemCompat.getActionView(searchItem);
         if (mSearchView != null) {
             mSearchView.setOnQueryTextListener(new SearchViewListener());
+            mSearchView.setQueryHint(getString(R.string.search_hint));
         }
         return true;
     }
@@ -111,7 +113,15 @@ public class MainActivity extends AppCompatActivity {
                 return true;
             default:
                 return super.onOptionsItemSelected(item);
+        }
+    }
 
+    private void startLoader(int id, Bundle b, LoaderManager.LoaderCallbacks<Cursor> cb) {
+        final LoaderManager loaderManager = getSupportLoaderManager();
+        if (loaderManager.getLoader(id) == null) {
+            loaderManager.initLoader(id, b, cb);
+        } else {
+            loaderManager.restartLoader(id, b, cb);
         }
     }
 
@@ -163,7 +173,7 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         public Loader<Cursor> onCreateLoader(int id, Bundle args) {
-            Log.d(TAG, "onCreateLoader");
+
             String[] projection = {MediaStore.Images.Media._ID, MediaStore.Images.Media.DATA, MediaStore.Images.Media.DESCRIPTION};
 
             String selection = null;
@@ -176,23 +186,27 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
 
-            String sort = null;
-            // String sort = MediaStore.Images.Media.DATE_TAKEN + " DESC";
-
+            // String sort = null;
+            String sort = MediaStore.Images.Media.DATE_TAKEN + " DESC";
 
             CursorLoader cursorLoader = new CursorLoader(MainActivity.this,
-                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection, selectionArgs, sort);
+                    MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, selection,
+                    selectionArgs, sort);
             return cursorLoader;
         }
 
         @Override
         public void onLoadFinished(Loader<Cursor> loader, Cursor data) {
-            mAdapter.swapCursor(data);
+            if (mAdapter != null) {
+                mAdapter.swapCursor(data);
+            }
         }
 
         @Override
         public void onLoaderReset(Loader<Cursor> loader) {
-            mAdapter.swapCursor(null);
+            if (mAdapter != null) {
+                mAdapter.swapCursor(null);
+            }
         }
     }
 
@@ -211,18 +225,13 @@ public class MainActivity extends AppCompatActivity {
         public void bindView(View view, Context context, Cursor cursor) {
 
             final TextView textView = (TextView) view.findViewById(R.id.textView);
-            String dsc = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DESCRIPTION));
-            textView.setText(dsc == null || dsc.trim().length() == 0 ? "" : dsc);
+            if (textView != null) {
+                String dsc = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DESCRIPTION));
+                textView.setText(dsc == null || dsc.trim().length() == 0 ? "" : dsc);
+            }
 
-            final ImageView imageView = (ImageView) view.findViewById(R.id.imageView);
-            try {
-                if (imageView != null && imageView.getDrawable() != null) {
-                    BitmapDrawable bd = ((BitmapDrawable) imageView.getDrawable());
-                    if (bd != null && bd.getBitmap() != null) {
-                        bd.getBitmap().recycle();
-                    }
-                }
-            } catch (Exception e) {}
+            final CustomImageView imageView = (CustomImageView) view.findViewById(R.id.imageView);
+            ImageTools.recycleImageView(imageView);
 
             int id = cursor.getInt(cursor.getColumnIndex(MediaStore.Images.Media._ID));
             String path = cursor.getString(cursor.getColumnIndex(MediaStore.Images.Media.DATA));
@@ -245,13 +254,13 @@ public class MainActivity extends AppCompatActivity {
         public boolean onQueryTextChange(String newText) {
             Bundle b = new Bundle();
             b.putString(MediaStore.Images.Media.DESCRIPTION, newText);
-            getSupportLoaderManager().restartLoader(LOADER_ID_PHOTOS, b, new ImageCallbacks());
+            startLoader(LOADER_ID_PHOTOS, b, new ImageCallbacks());
             return false;
         }
     }
 
-     // look in http://developer.android.com/training/displaying-bitmaps/process-bitmap.html
-    class ThumbnailLoader extends AsyncTask<Void, Void, Bitmap> {
+    // look in http://developer.android.com/training/displaying-bitmaps/process-bitmap.html
+    private class ThumbnailLoader extends AsyncTask<Void, Void, Bitmap> {
 
         private final WeakReference<ImageView> mViewReference;
         private String mPath;
@@ -264,11 +273,11 @@ public class MainActivity extends AppCompatActivity {
             mId = id;
         }
 
-         @Override
+        @Override
         protected Bitmap doInBackground(Void... params) {
 
             try {
-                if (mViewReference != null && mViewReference.get() != null && ! isCancelled()) {
+                if (mViewReference != null && mViewReference.get() != null && !isCancelled()) {
                     return ImageTools.loadThumbnail(MainActivity.this, mId, mPath);
                 }
             } catch (Exception e) {
@@ -289,19 +298,20 @@ public class MainActivity extends AppCompatActivity {
                 if (imageView != null && mPath.equals(imageView.getTag())) {
                     imageView.setImageBitmap(bitmap);
                     imageView.setVisibility(View.VISIBLE);
+
+                    ImageTools.animate(imageView);
                 }
             }
         }
     }
 
-    class MediaStoreImageData {
+    public class MediaStoreImageData {
         public String path;
         public int id;
 
         public MediaStoreImageData(String path, int id) {
             this.path = path;
             this.id = id;
-
         }
     }
 }

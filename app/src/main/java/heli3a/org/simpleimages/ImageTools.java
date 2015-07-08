@@ -2,10 +2,15 @@ package heli3a.org.simpleimages;
 
 import android.content.Context;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Matrix;
+import android.graphics.drawable.BitmapDrawable;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.provider.MediaStore;
+import android.support.v4.view.ViewCompat;
+import android.view.View;
+import android.widget.ImageView;
 
 import java.io.File;
 import java.io.IOException;
@@ -15,10 +20,13 @@ import java.io.IOException;
  */
 public class ImageTools {
 
-    public static Bitmap loadBitmap(Context c, int id, String path) throws IOException {
-        Bitmap b = MediaStore.Images.Media.getBitmap(c.getContentResolver(), getImageUri(id));
-        if (b != null && path != null && new File(path).exists()) {
-            return rotate(b, path);
+    public static Bitmap loadBitmap(Context c, String path, int reqWidth, int reqHeight) throws IOException {
+
+        if (path != null && new File(path).exists()) {
+            Bitmap b = ImageTools.decodeSampledBitmapFromFile(path, reqWidth, reqHeight);
+            if (b != null && path != null && new File(path).exists()) {
+                return rotate(b, path);
+            }
         }
         return null;
     }
@@ -63,5 +71,62 @@ public class ImageTools {
 
     public static Uri getImageUri(int id) {
         return Uri.withAppendedPath(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, Integer.toString(id));
+    }
+
+    // http://developer.android.com/training/displaying-bitmaps/load-bitmap.html
+    public static int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        // Raw height and width of image
+        final int height = options.outHeight;
+        final int width = options.outWidth;
+        int inSampleSize = 1;
+
+        if (height > reqHeight || width > reqWidth) {
+
+            final int halfHeight = height / 2;
+            final int halfWidth = width / 2;
+
+            // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+            // height and width larger than the requested height and width.
+            while ((halfHeight / inSampleSize) > reqHeight && (halfWidth / inSampleSize) > reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+
+        return inSampleSize;
+    }
+
+    // http://developer.android.com/training/displaying-bitmaps/load-bitmap.html
+    public static Bitmap decodeSampledBitmapFromFile(String path, int reqWidth, int reqHeight) {
+
+        // First decode with inJustDecodeBounds=true to check dimensions
+        final BitmapFactory.Options options = new BitmapFactory.Options();
+        options.inJustDecodeBounds = true;
+        BitmapFactory.decodeFile(path, options);
+
+        // Calculate inSampleSize
+        options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight);
+
+        // Decode bitmap with inSampleSize set
+        options.inJustDecodeBounds = false;
+        return BitmapFactory.decodeFile(path, options);
+    }
+
+    public static void recycleImageView(ImageView imageView) {
+        try {
+            if (imageView != null && imageView.getDrawable() != null) {
+                BitmapDrawable bd = ((BitmapDrawable) imageView.getDrawable());
+                if (bd != null && bd.getBitmap() != null) {
+                    bd.getBitmap().recycle();
+                }
+            }
+        } catch (Exception e) {
+        }
+    }
+
+    public static void animate(View view) {
+        ViewCompat.setScaleX(view, 0f);
+        ViewCompat.setScaleY(view, 0f);
+        ViewCompat.setAlpha(view, 0f);
+        ViewCompat.animate(view).setDuration(250).scaleX(1f).scaleY(1f).alpha(1f).start();
     }
 }
