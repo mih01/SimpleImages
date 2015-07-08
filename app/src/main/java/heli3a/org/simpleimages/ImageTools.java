@@ -8,8 +8,6 @@ import android.graphics.drawable.BitmapDrawable;
 import android.media.ExifInterface;
 import android.net.Uri;
 import android.provider.MediaStore;
-import android.support.v4.view.ViewCompat;
-import android.view.View;
 import android.widget.ImageView;
 
 import java.io.File;
@@ -121,12 +119,5 @@ public class ImageTools {
             }
         } catch (Exception e) {
         }
-    }
-
-    public static void animate(View view) {
-        ViewCompat.setScaleX(view, 0f);
-        ViewCompat.setScaleY(view, 0f);
-        ViewCompat.setAlpha(view, 0f);
-        ViewCompat.animate(view).setDuration(250).scaleX(1f).scaleY(1f).alpha(1f).start();
     }
 }

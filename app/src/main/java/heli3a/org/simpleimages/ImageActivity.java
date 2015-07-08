@@ -208,7 +208,7 @@ public class ImageActivity extends AppCompatActivity {
                 ImageActivity.this.mImageView.setImageBitmap(bitmap);
                 ImageActivity.this.mImageView.setVisibility(View.VISIBLE);
 
-                ImageTools.animate(ImageActivity.this.mImageView);
+                AnimationTools.animate(ImageActivity.this.mImageView, 550);
             }
         }
     }

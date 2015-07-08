@@ -11,5 +11,5 @@
     <string name="share_image">Share image using</string>
     <string name="search_hint">Suche...</string>
     <string name="load_image">Das Bild wird geladen...</string>
-    <string name="add_tag">Beschreibung</string>
+    <string name="add_tag">Beschreibung hinzufügen</string>
 </resources>

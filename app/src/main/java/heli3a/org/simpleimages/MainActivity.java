@@ -299,7 +299,7 @@ public class MainActivity extends AppCompatActivity {
                     imageView.setImageBitmap(bitmap);
                     imageView.setVisibility(View.VISIBLE);
 
-                    ImageTools.animate(imageView);
+                    AnimationTools.animate(imageView, 250);
                 }
             }
         }
